@@ -17,6 +17,7 @@ private:
 private:
     static void print_times(std::ostream &os, int val, int cnt)
     {
+        os << "#0";
         char ch = static_cast<char>(val);
         switch (cnt) {
         case 3:
@@ -27,6 +28,7 @@ private:
             os << ch;
             break;
 
+        // 4回以上の場合はRLE圧縮ができる
         default:
             os << "!" << cnt;
             os << ch;
@@ -47,6 +49,7 @@ private:
 
         std::vector<std::string> escaped_lines;
 
+        // 縦6pixelごとに分割して処理する
         for (int ny = 0; ny < (height + 5) / 6; ny++) {
             int y = ny * 6;
 
@@ -54,6 +57,8 @@ private:
             std::vector<std::tuple<int, int, int, int, int>> colorpos;
 
             // Construct color2pos map.
+            // 画像幅 x 6 の範囲について「その場所の色」を記録していく。
+            // 色情報はα値分だけ薄めることとし、0-100に収める
             for (int x = 0; x < width; x++) {
                 for (int i = 0; i < 6; i++) {
                     int pos = ((y + i) * width + x) * 4;
@@ -70,6 +75,7 @@ private:
                 }
             }
 
+            //  rgb順にソートして、同一色を一度に表示できるように
             std::sort(colorpos.begin(), colorpos.end());
 
             // Do actual printing.
@@ -77,35 +83,43 @@ private:
             while (cpit != colorpos.end()) {
                 int red = std::get<0>(*cpit), green = std::get<1>(*cpit),
                     blue = std::get<2>(*cpit);
+                // 同一色の終端を探す
                 auto end_cpit =
                     std::upper_bound(colorpos.begin(), colorpos.end(),
                                      std::tuple<int, int, int, int, int>(
                                          red, green, blue, INT_MAX, INT_MAX));
-                // [cpit, end_cpit) has the same color.
+                // [cpit, end_cpit) は同一色
 
-                // Go to the head of the line.
-                ss << "$";
-                // Set color.
-                ss << "#10;2;" << red << ";" << green << ";" << blue;
+                // 同一行の先頭に戻る
+                if (cpit != colorpos.begin())
+                    ss << "$";
+                // 10番目のパレットに色を設定する
+                ss << "#0;2;" << red << ";" << green << ";" << blue;
 
+                // 同一色であれば x 座標でソートされていることを利用する
                 int val0 = 0, cnt = 0;
                 for (int x = 0; x < width; x++) {
+                    // x座標が同一の間、y座標の分だけフラグをたてる
                     int val = 0;
                     for (; cpit != end_cpit && std::get<3>(*cpit) == x; ++cpit)
                         val |= (1 << std::get<4>(*cpit));
                     val += '?';
 
+                    // 同一の1x6パターンが続く場合はまとめて表示する
                     if (cnt == 0 || val == val0) {
                         val0 = val;
                         ++cnt;
                         continue;
                     }
 
+                    // 異なる1x6パターンが来た場合には前のパターンを表示する
                     print_times(ss, val0, cnt);
 
+                    // パターンのリセット
                     cnt = 1;
                     val0 = val;
                 }
+                // 最後の1x6パターンを表示する
                 print_times(ss, val0, cnt);
             }
 
@@ -152,11 +166,19 @@ public:
 private:
     static const char *enter()
     {
-        return "\033P0;0;8q\"1;1";
+        // \33P : sixelの開始
+        // 0; : p1 aspect ratio
+        // 0; : p2 color of zero
+        // 8  : p3 grid size parameter
+        // q  : parameter end
+        // "1;1 : 何だか不明
+        // return "\033P0;0;8q\"1;1";
+        return "\033Pq\"1;1";
     }
 
     static const char *exit()
     {
+        // \033\ : sixelの終了
         return "\033\\";
     }
 };
