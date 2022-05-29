@@ -49,6 +49,9 @@ private:
 
         std::vector<std::string> escaped_lines;
 
+        // 画像の大きさを指定する
+        escaped_lines.emplace_back(";" + std::to_string(width) + ";" + std::to_string(height));
+
         // 縦6pixelごとに分割して処理する
         for (int ny = 0; ny < (height + 5) / 6; ny++) {
             int y = ny * 6;
